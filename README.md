@@ -2,7 +2,6 @@
 NOTE: This is a work-in-progress, the code is not ready for production use.  
 
  ```python
-  from threading import active_count
   from ftx.client import Client
   from ftx.websocket import Websocket
   from ftx.orderbook_feed import OrderBookFeed
