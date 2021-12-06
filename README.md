@@ -1,11 +1,19 @@
-# Quickstart
+# Quickstart (from example.py in the repo)
 NOTE: This is a work-in-progress, the code is not ready for production use.  
 
  ```python
+  from threading import active_count
+  from ftx.client import Client
+  from ftx.websocket import Websocket
+  from ftx.orderbook_feed import OrderBookFeed
+  from ftx.credentials import API_KEY
+  import time
+ 
   ###########################
   ## REST Client
   ###########################
-
+ 
+  API_KEY = None # provide your key here
   client = Client(api_key=API_KEY)
 
   # get active contracts
