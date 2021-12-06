@@ -5,7 +5,6 @@ NOTE: This is a work-in-progress, the code is not ready for production use.
   from ftx.client import Client
   from ftx.websocket import Websocket
   from ftx.orderbook_feed import OrderBookFeed
-  from ftx.credentials import API_KEY
   import time
  
   ###########################
