@@ -92,7 +92,7 @@ NOTE: This is a work-in-progress, the code is not ready for production use.
   time.sleep(5)
   books.stop()
   ```
-# Maintaining the Orderbook
+# Maintaining the Orderbook - The Missing Manual
 FTX provides documentation on how to maintain the state of an orderbook, but does not provide concrete examples or a reference implementation.  This is unfortunate as although the documentation is fairly detailed, it still leaves plenty of questions.  For those that are curious, below we will walk through how to apply the steps as outlined in the [Book Depth](https://docs.ledgerx.com/reference/book-depth) section of the documentation.  Note that this is all handled for you by `OrderBookFeed`, so if you don't care about the details feel free to ignore this section.
 
 ### Queuing Action Report Messages
