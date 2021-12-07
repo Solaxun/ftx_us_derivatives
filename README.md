@@ -1,5 +1,5 @@
-# Quickstart (from example.py in the repo)
-NOTE: This is a work-in-progress, the code is not ready for production use.  
+# Quickstart
+NOTE: This is a work-in-progress, the code is not ready for production use.  The below code can be found in `example.py`.
 
  ```python
   from ftx.client import Client
