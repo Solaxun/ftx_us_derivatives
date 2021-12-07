@@ -170,36 +170,136 @@ all_my_orderbooks[cid] = ob # so we can apply action_reports later
 For each message in `book_updates`, we extract the `price`, `size`, and `is_ask` fields and build the book depth by aggregating the size at each price-level for the relevant side of the book. In addition to building the bid and ask depth, we store each message in it's entirety keyed by `mid`.  This will become important for applying `action_reports` received from the websocket.
 
 ### Applying Action Reports
-Now we have a book that has been initalized and can start updating with received messages from the websocket. There are [4 primary message](https://docs.ledgerx.com/reference/book-depth) types to handle.  Below we repeat much of the same information with somewhat different nomenclature to align with the process we've been following so far:
+Now we have a book that has been initalized and can start updating with received messages from the websocket. There are [4 primary message](https://docs.ledgerx.com/reference/book-depth) types to handle.  Below we repeat much of the same information from the linked documentation, but with more specific examples aligned with the terminology and variable names we've been working with so far.
+
+**IMPORTANT**: For every message received, only update the book where the messages's `monotonic_clock` is exactly one greater than the book's current `monotonic_clock`. Messages with a monotonic_clock less than or equal to the book's current monotonic_clock can be ignored because their data is already incorporated into the book.  Messages with a monotonic_clock greater than one plus the book's current monotonic_clock indicate that we missed a message, and our book is now stale.  This can be remediated by restoring from the queued messages as mentioned in [Queuing Action Report Messages](#queuing-action-report-messages) or by requesting the book state as mentioned in [Loading the Initial Book State](#loading-the-initial-book-state).
 
 
 
 | status_type | Description                                     | How to Apply
 | ------------| -----------------                               |-------------
-| 200         |  order inserted                                 | Increase book `price` by `inserted_price` and `size` by `inserted_size`</br>Save the message and key it by `mid`
-| 201         |  order filled                                   | Reduce `price` and `size` by `filled_price` and `filled_size`</br>Do this both for the book itself (e.g. adj bids/asks) as well as for the existing message keyed by `mid` in the book.</br> If `size` is zero delete both the `mid` and `price` level from book.
-| 203         |  order canceled                                  | Retrieve `mid` from the orderbook, store it's price/size/side, and delete the `mid` from book</b> Then remove that price and size from `side` of book.
-| 204         |  order canceled & replaced (only size changed, not price)        | Set `size` = `inserted_size` both for the book itself and for the existing message keyed by `mid` in the book
+| 200         |  order inserted                                 |- Extract `inserted_size`, `inserted_price` and `is_ask` from the message</br>-  Adjust ob.bids or ob.asks for the order<sup>1</sup>:</br>`ob.[<side>][inserted_price] += inserted_size`</br>- Save the message in the book `ob.msgs[mid]=message`
+| 201         |  order filled                                   | - Extract `filled_price`, `filled_size` and `mid` from the message</br>- Use the `mid` to extract and store the resting `price`, `size`, and `side` from ob.msgs[mid]</br>- Adjust ob.bids or ob.asks for the order<sup>1</sup>:</br>`ob.[<side>][price] -= filled_size`
+| 203         |  order canceled                                  | - Retrieve `mid` from the message</br>- Use the `mid` to extract and store the resting `price`, `size`, and `side` from ob.msgs[mid]</br>- Delete the `mid` from book: `del ob.msgs[mid]`</br>- Adjust ob.bids or ob.asks by removing the canceled amount<sup>1</sup>:</br> `ob.[<side>][price] -= size`
+| 204         |  order canceled & replaced (only size changed, not price)        | - Extract `mid` and `inserted_size` from the message</br>- Save `ob.msgs[mid][size]` in a variable called `resting_size`</br>- Set `ob.msgs[mid][size] = inserted_size`</br>- Extract `price` and `is_ask` from the msg</br>- Adjust ob.bids or ob.asks by adding the change in size<sup>1</sup>:</br> `ob.[<side>][price] += inserted_size - resting_size`
 
+<sup>1</sup> _In the examples above \<side\> means asks if `is_ask` == true else bids_
 
+### Concrete Examples:
+Book Updating Code (shared by all messages below)
+```python
+def update_depth(self,func,is_ask,price,size):
+    if is_ask:
+        side = self.asks
+    else:
+        side = self.bids
+        price = -price
 
-The above is still probably a bit fuzzy without seeing an implementation, but I hope combined with FTX's docuemntation it provides some incremental benefit.  Note that when we say "apply both to book itself and to the existing message keyed by the `mid` in the book", what we mean is this:
+    if price in side:
+        cur_size = side[price]
+        new_size = side[price] = func(cur_size,size)
+        if new_size == 0:
+            del side[price]
+    else:
+        side[price] = size
+```
+Order Inserted (200)
+```python
+## select fields from 200 action_report message
+{
+ "inserted_price": 1000,
+ "inserted_size": 100,
+ "mid": 2828,
+ "lots_of": "other_fields"
+}
 
-Assuming we receive an action_report with status_type == 201, e.g. a fill.  Fills will have the following fields (plus many others not relevant for this example):
-```json
+## code to handle message
+def add_order(self,msg):
+    mid,price,size = msg['mid'], msg['inserted_price'], msg['inserted_size']
+    if mid in self.msgs:
+        self.msgs[mid]['size'] += size
+    else:
+        self.msgs[mid] = msg
+
+    self.update_depth(lambda x,y: x + y,msg['is_ask'],price,size)
+
+```
+Order Filled (201)
+```python
+## select fields from 201 action_report message
 {
  "filled_price": 1000,
  "filled_size": 100,
  "mid": 2828,
  "lots_of": "other_fields"
 }
+
+## code to handle message
+def fill_order(self,msg):
+    mid,price,size = msg['mid'], msg['filled_price'], msg['filled_size']
+    # MID's we haven't seen are from the other side of the trade, e.g.
+    # marketable limit or market orders that immediately fill by matching
+    # our resting MID.  If any amount of the other side is unfilled, it will
+    # end up as it's own message (201) and we will pick it up there.
+    if mid in self.msgs:
+        resting = self.msgs[mid]
+        resting['price'] -= price
+        resting['size']  -= size
+
+        if resting['size'] == 0:
+            del self.msgs[mid]
+        if resting['size'] < 0:
+            raise ValueError(
+                '{}: filled={} > resting={}'.format(msg['cid'],size,resting['size'])
+                )
+
+        self.update_depth(lambda x,y: x - y,msg['is_ask'],price,size)   
 ```
-There are two places we need to apply this message to update the orderbook:
- - orderbook.msgs (dict of mid->messages)
- - either orderbook.asks or orderbook.bids depending on if is_ask is true or false (SortedDict of price->size)
+Order Canceled (203)
+```python
+## select fields from 203 action_report message
+{
+ "original_price": 1000,
+ "original_size": 100,
+ "mid": 2828,
+ "lots_of": "other_fields"
+}
 
-The reason this is necessary is that if we later receive a 203 cancel message, we need to know the resting amount to remove from the book because cancel messages only show the original size of the order, not the current size.  We can only know the current size by adjusting the mid over time with fills and 204 cancel & replace orders which modify the size.
+## code to handle message
+def cancel_order(self,msg):
+    mid = msg['mid']
+    resting = self.msgs[mid]
+    del self.msgs[mid]
 
-TODO: monotonic clock - ignore stale messages, restore from queue if clock gap.
+    # remove the amount that was left in the order from bid or asks
+    resting_price, resting_size = resting['price'], resting['size']
+    self.update_depth(lambda x,y: x - y,resting['is_ask'],resting_price,
+                      resting_size) 
+```
+Order Canceled & Replaced (204)
+```python
+## select fields from 204 action_report message
+{
+ "inserted_price": 1000,
+ "inserted_size": 100,
+ "mid": 2828,
+ "lots_of": "other_fields"
+}
+
+## code to handle message
+def cancel_and_replace(self,msg):
+    mid, inserted_size = msg['mid'], msg['inserted_size']
+    resting = self.msgs[mid]
+    resting_price = resting['price']
+    resting_size = resting['size']
+
+    resting['size'] = inserted_size
+
+    if msg['is_ask']:
+        self.asks[resting_price] += inserted_size - resting_size
+    else:
+        self.bids[-resting_price] += inserted_size - resting_size
+```
+
 
 
