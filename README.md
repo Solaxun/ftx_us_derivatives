@@ -188,10 +188,10 @@ The above is still probably a bit fuzzy without seeing an implementation, but I 
 Assuming we receive an action_report with status_type == 201, e.g. a fill.  Fills will have the following fields (plus many others not relevant for this example):
 ```json
 {
- 'filled_price':1000,
- 'filled_size':100
- 'mid': 2828
- 'lots_of':"other_fields"
+ "filled_price":1000,
+ "filled_size":100
+ "mid": 2828
+ "lots_of":"other_fields"
 }
 ```
 There are two places we need to apply this message to update the orderbook:
