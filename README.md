@@ -160,7 +160,7 @@ class OrderBook():
                 else:
                     self.bids[-px] = sz 
 ```
-Let's assume the [json response above]#(loading-the-initial-book-state) is saved in a variable called `book_state`, then we could initalize this OrderBook as follows:
+Let's assume the [json response above](#loading-the-initial-book-state) is saved in a variable called `book_state`, then we could initalize this OrderBook as follows:
 ```python
 all_my_orderbooks = {}
 book_updates = book_state['data']['book_states']
