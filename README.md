@@ -195,8 +195,8 @@ Assuming we receive an action_report with status_type == 201, e.g. a fill.  Fill
 }
 ```
 There are two places we need to apply this message to update the orderbook:
- - orderbook[mid]
- - either orderbook[asks] or orderbook[bids] (depending on if is_ask is true or false)
+ - orderbook.msgs (dict of mid->messages)
+ - either orderbook.asks or orderbook.bids depending on if is_ask is true or false (SortedDict of price->size)
 
 The reason this is necessary is that if we later receive a 203 cancel message, we need to know the resting amount to remove from the book because cancel messages only show the original size of the order, not the current size.  We can only know the current size by adjusting the mid over time with fills and 204 cancel & replace orders which modify the size.
 
