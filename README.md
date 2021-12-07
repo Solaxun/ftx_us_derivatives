@@ -189,8 +189,8 @@ Assuming we receive an action_report with status_type == 201, e.g. a fill.  Fill
 ```json
 {
  "filled_price":1000,
- "filled_size":100
- "mid": 2828
+ "filled_size":100,
+ "mid": 2828,
  "lots_of":"other_fields"
 }
 ```
