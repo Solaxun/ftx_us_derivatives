@@ -1,8 +1,6 @@
-from threading import active_count
 from ftx.client import Client
 from ftx.websocket import Websocket
 from ftx.orderbook_feed import OrderBookFeed
-from ftx.credentials import API_KEY
 import time
 
 if __name__ == "__main__":
@@ -10,7 +8,7 @@ if __name__ == "__main__":
     ###########################
     ## REST Client
     ###########################
-
+    API_KEY = None
     client = Client(api_key=API_KEY)
 
     # get active contracts
@@ -48,11 +46,11 @@ if __name__ == "__main__":
     ws = MyWebSocket(api_key=API_KEY)
     ws.start()
 
-    ## listen for 2 seconds and then stop
-    time.sleep(2)
+    ## listen for 3 seconds and then stop
+    time.sleep(3)
     ws.stop()
     time.sleep(2)
-    print()
+    print('Done receiving Websocket messages...')
     ###########################
     ## Real-Time Orderbook
     ###########################
@@ -73,7 +71,7 @@ if __name__ == "__main__":
 
     books = OrderBookFeed(
         api_key=API_KEY,
-        contracts=[22229264, 22209160, 22229265,22229263,22229262],
+        contracts=[22229264, 22209160,22229265,22229263,22229262,22213562],
         on_book=do_something_with_book        
     )
 
@@ -82,11 +80,11 @@ if __name__ == "__main__":
 
     books.start()
 
-    ## Listen for 5 seconds then stop. 
+    ## Listen for a while then stop. 
 
     ## Note: if none of the books subscribed to update during this time you won't
     ## see anything print.  Increase the sleep to give more time for an update to
     ## be received or subcribe to more active (or a larger number) of contracts
     ## to see updates print
-    time.sleep(5)
+    time.sleep(10)
     books.stop()

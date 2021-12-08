@@ -56,6 +56,10 @@ class OrderBook():
             new_size = side[price] = func(cur_size,size)
             if new_size == 0:
                 del side[price]
+            if new_size < 0:
+                raise ValueError(
+                    'order size of {} exceeds resting size of {}'.format(size,cur_size)
+                    )
         else:
             side[price] = size
 
@@ -76,20 +80,15 @@ class OrderBook():
         # end up as it's own message (201) and we will pick it up there.
         if mid in self.msgs:
             resting = self.msgs[mid]
-            resting['price'] -= price
-            resting['size']  -= size
-
-            if resting['size'] == 0:
+            resting_size = resting['size'] = resting['size'] - size
+            if resting_size == 0:
                 del self.msgs[mid]
-            if resting['size'] < 0:
+            if resting_size < 0:
                 raise ValueError(
-                    '{}: filled={} > resting={}'.format(msg['cid'],size,resting['size'])
+                    '{}: filled={} > resting={}'.format(msg['cid'],size,resting_size)
                     )
            
             self.update_depth(lambda x,y: x - y,msg['is_ask'],price,size)   
-
-        else:
-            pass 
 
     def cancel_order(self,msg):
         mid = msg['mid']
@@ -105,13 +104,14 @@ class OrderBook():
         mid, inserted_size = msg['mid'], msg['inserted_size']
         resting = self.msgs[mid]
         resting_price = resting['price']
+        resting_size = resting['size']
 
         resting['size'] = inserted_size
         
         if msg['is_ask']:
-            self.asks[resting_price] = inserted_size
+            self.asks[resting_price] += inserted_size - resting_size
         else:
-            self.bids[-resting_price] = inserted_size            
+            self.bids[-resting_price] += inserted_size - resting_size          
 
     def __str__(self):
         bidpx,bidsz = self.bid
